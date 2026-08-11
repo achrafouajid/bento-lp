@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  landing:
+    image: bento-landing:latest
+    container_name: bento-landing
+    restart: unless-stopped
+
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    networks:
+      - proxy
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.bento-landing.rule=Host(`bento212.com`) || Host(`www.bento212.com`)"
+      - "traefik.http.routers.bento-landing.entrypoints=websecure"
+      - "traefik.http.routers.bento-landing.tls=true"
+      - "traefik.http.routers.bento-landing.tls.certresolver=letsencrypt"
+      - "traefik.http.services.bento-landing.loadbalancer.server.port=3000"
+
+networks:
+  proxy:
+    external: true
