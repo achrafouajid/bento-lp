@@ -1,26 +1,467 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-ink-950: #08080b;
+  --color-ink-900: #0e0e12;
+  --color-ink-800: #16161c;
+  --color-ink-700: #23232c;
+  --color-fg: #fafafa;
+  --color-fg-muted: #a1a1aa;
+  --color-accent: #2563eb;
+  --color-accent-2: #f97316;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
+
+  --breakpoint-xs: 480px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+@custom-variant hover (&:hover);
+
+html {
+  color-scheme: dark;
+  scroll-behavior: smooth;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-ink-950);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: white;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  background: var(--color-accent);
+  color: white;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0 0 8px 0;
+  font-weight: 600;
+}
+
+.skip-link:focus {
+  left: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.prose-measure {
+  max-width: 65ch;
+}
+
+/* ==========================================================================
+   Motion system
+   --------------------------------------------------------------------------
+   Rules this file follows, so animation never costs us LCP/INP or SEO:
+
+   1. Only `transform` / `opacity` / `filter`-free properties are animated, so
+      every effect stays on the compositor and off the main thread.
+   2. Scroll-linked effects prefer native scroll-driven animations
+      (`animation-timeline`), which run off the main thread entirely. A small
+      IntersectionObserver fallback (see MotionRuntime.tsx) only ships work for
+      browsers without them.
+   3. Base styles are the *visible* state. Elements are hidden only inside a
+      keyframe or behind the `html.js` guard, so no-JS crawlers and browsers
+      with an inactive timeline always render complete content.
+   4. Mobile-first: shorter travel and shorter durations below `sm`, and the
+      pointer-driven effects (spotlight, parallax) never bind on coarse
+      pointers.
+   5. Everything is wrapped in `prefers-reduced-motion: no-preference`.
+   ========================================================================== */
+
+:root {
+  /* Mobile-first travel distance — short trips read as "snappy" on a phone. */
+  --reveal-y: 14px;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.22, 1.15, 0.36, 1);
+  --dur-reveal: 0.5s;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --reveal-y: 26px;
+    --dur-reveal: 0.62s;
+  }
+}
+
+@keyframes reveal-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, var(--reveal-y), 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Transform-only variant: used for the LCP headline so the element is never
+   painted at opacity 0 (which would postpone the LCP timestamp). */
+@keyframes reveal-lift {
+  from {
+    transform: translate3d(0, calc(var(--reveal-y) * 0.8), 0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes draw-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -10px, 0);
+  }
+}
+
+@keyframes aurora-drift {
+  0%,
+  100% {
+    transform: translate3d(-50%, -33%, 0) scale(1);
+    opacity: 0.28;
+  }
+  50% {
+    transform: translate3d(-46%, -30%, 0) scale(1.12);
+    opacity: 0.4;
+  }
+}
+
+@keyframes sheen {
+  from {
+    transform: translate3d(-120%, 0, 0) skewX(-18deg);
+  }
+  to {
+    transform: translate3d(320%, 0, 0) skewX(-18deg);
+  }
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* --- Scroll reveals -------------------------------------------------- */
+
+  /* Preferred path: native scroll-driven animation, zero JS, zero main-thread
+     work. `--i` staggers by shifting the range rather than by delay, because
+     delays are meaningless on a progress-based timeline. */
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: reveal-rise linear both;
+      animation-timeline: view();
+      animation-range: entry calc(6% + var(--i, 0) * 5%) cover calc(26% + var(--i, 0) * 5%);
+    }
+
+    .reveal-stagger > * {
+      animation: reveal-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 4% cover 24%;
+    }
+
+    .reveal-stagger > *:nth-child(2) {
+      animation-range: entry 9% cover 29%;
+    }
+    .reveal-stagger > *:nth-child(3) {
+      animation-range: entry 14% cover 34%;
+    }
+    .reveal-stagger > *:nth-child(4) {
+      animation-range: entry 19% cover 39%;
+    }
+    .reveal-stagger > *:nth-child(n + 5) {
+      animation-range: entry 24% cover 44%;
+    }
+  }
+
+  /* Fallback path. Gated on `html.js` so a JS-less client (and any crawler
+     that does not execute scripts) keeps the fully visible base style. */
+  @supports not (animation-timeline: view()) {
+    html.js .reveal,
+    html.js .reveal-stagger > * {
+      opacity: 0;
+      transform: translate3d(0, var(--reveal-y), 0);
+      transition: opacity var(--dur-reveal) var(--ease-out-expo),
+        transform var(--dur-reveal) var(--ease-out-expo);
+      transition-delay: calc(var(--i, 0) * 70ms);
+    }
+
+    html.js .reveal.is-in,
+    html.js .reveal-stagger.is-in > * {
+      opacity: 1;
+      transform: none;
+    }
+
+    html.js .reveal-stagger.is-in > *:nth-child(2) {
+      transition-delay: 70ms;
+    }
+    html.js .reveal-stagger.is-in > *:nth-child(3) {
+      transition-delay: 140ms;
+    }
+    html.js .reveal-stagger.is-in > *:nth-child(4) {
+      transition-delay: 210ms;
+    }
+    html.js .reveal-stagger.is-in > *:nth-child(n + 5) {
+      transition-delay: 280ms;
+    }
+  }
+
+  /* --- Hero entrance ---------------------------------------------------- */
+
+  .hero-in {
+    animation: reveal-rise 0.65s var(--ease-out-expo) both;
+    animation-delay: calc(var(--i, 0) * 80ms);
+  }
+
+  /* No opacity ramp: keeps the LCP element painted on its very first frame. */
+  .hero-lcp {
+    animation: reveal-lift 0.6s var(--ease-out-expo) both;
+  }
+
+  .hero-mockup {
+    animation: reveal-rise 0.9s var(--ease-out-expo) both;
+    animation-delay: 0.32s;
+  }
+
+  .hero-aurora {
+    animation: aurora-drift 22s ease-in-out infinite;
+  }
+
+  .float-slow {
+    animation: float-y 7s ease-in-out infinite;
+  }
+
+  /* --- Header ----------------------------------------------------------- */
+
+  /* Reading-progress bar: pure compositor work, driven by the root scroller. */
+  @supports (animation-timeline: scroll()) {
+    .scroll-progress {
+      animation: draw-x linear both;
+      animation-timeline: scroll(root block);
+    }
+
+    .header-shade {
+      animation: header-solid linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0 140px;
+    }
+  }
+
+  /* --- Micro-interactions ----------------------------------------------- */
+
+  /* Uses the independent `scale`/`translate` properties rather than
+     `transform`, so hover and press compose with (instead of being clobbered
+     by) the reveal keyframes, which own `transform`. */
+  .press:active {
+    scale: 0.97;
+  }
+
+  .lift {
+    transition: translate 0.25s var(--ease-out-expo), border-color 0.25s ease,
+      box-shadow 0.25s ease;
+  }
+
+  .lift:hover {
+    translate: 0 -4px;
+  }
+
+  .btn-sheen::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.28), transparent);
+    width: 45%;
+    transform: translate3d(-120%, 0, 0) skewX(-18deg);
+    opacity: 0;
+  }
+
+  .btn-sheen:hover::after {
+    opacity: 1;
+    animation: sheen 0.75s var(--ease-out-expo);
+  }
+
+  .panel-in {
+    animation: panel-in 0.35s var(--ease-out-expo) both;
+  }
+
+  .sheet-in {
+    animation: sheet-in 0.24s var(--ease-out-expo) both;
+  }
+
+  .sheet-in > * > * > li,
+  .sheet-in > a {
+    animation: reveal-rise 0.3s var(--ease-out-expo) both;
+  }
+
+  /* Connector rules draw themselves as the step list scrolls into view.
+     Base state is fully drawn, so unsupported browsers just see a static rule. */
+  @supports (animation-timeline: view()) {
+    .line-draw {
+      transform-origin: 0 50%;
+      animation: draw-x linear both;
+      animation-timeline: view();
+      animation-range: entry 25% cover 45%;
+    }
+  }
+
+  .tab-indicator {
+    transition: transform 0.38s var(--ease-spring), width 0.38s var(--ease-spring),
+      height 0.38s var(--ease-spring);
+  }
+}
+
+@keyframes header-solid {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Base state is collapsed, so a browser without scroll timelines shows no bar
+   rather than a permanently full one. Set with `transform` (not Tailwind's
+   `scale-x-0`, which writes the separate `scale` property and would zero the
+   keyframed transform out). */
+.scroll-progress {
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+}
+
+/* --- Pointer-driven card spotlight ------------------------------------- */
+/* `--spot` is toggled by MotionRuntime only on fine pointers; the gradient
+   layer costs nothing until then because its opacity stays 0. */
+.spot {
+  position: relative;
+  isolation: isolate;
+}
+
+.spot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: radial-gradient(
+    320px circle at var(--mx, 50%) var(--my, 50%),
+    color-mix(in oklab, var(--color-accent) 22%, transparent),
+    transparent 65%
+  );
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .spot:hover::before {
+    opacity: 1;
+  }
+}
+
+/* --- Accordion --------------------------------------------------------- */
+
+.acc-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  transition: grid-template-rows 0.32s var(--ease-out-expo);
+}
+
+.acc-panel[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+
+.acc-inner {
+  min-height: 0;
+  opacity: 0;
+  transform: translate3d(0, -4px, 0);
+  transition: opacity 0.25s ease, transform 0.25s var(--ease-out-expo);
+}
+
+.acc-panel[data-open="true"] .acc-inner {
+  opacity: 1;
+  transform: none;
+  transition-delay: 0.06s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acc-panel,
+  .acc-inner {
+    transition: none;
+  }
+}
+
+/* --- Animated nav underline -------------------------------------------- */
+
+.underline-fx {
+  position: relative;
+}
+
+.underline-fx::after {
+  content: "";
+  position: absolute;
+  left: 0.875rem;
+  right: 0.875rem;
+  bottom: 0.375rem;
+  height: 1.5px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  transition: transform 0.3s var(--ease-out-expo);
+}
+
+.underline-fx:hover::after,
+.underline-fx:focus-visible::after {
+  transform: scaleX(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .underline-fx::after {
+    transition: none;
+  }
 }
