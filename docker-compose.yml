@@ -1,12 +1,15 @@
-version: '3.8'
-
 services:
   landing:
+    # `image` lets CI deploy by `docker compose pull` (LP_IMAGE_TAG set to the
+    # commit-sha tag GHCR just built); `build` keeps `docker compose up -d --build`
+    # working unchanged for local/manual use.
+    image: ghcr.io/achrafouajid/bento-lp:${LP_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
-    image: bento-landing:latest
-    container_name: bento-landing
+
+    container_name: bento-lp
+
     restart: unless-stopped
 
     environment:
@@ -20,11 +23,12 @@ services:
 
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.bento-landing.rule=Host(`bento212.com`) || Host(`www.bento212.com`)"
-      - "traefik.http.routers.bento-landing.entrypoints=websecure"
-      - "traefik.http.routers.bento-landing.tls=true"
-      - "traefik.http.routers.bento-landing.tls.certresolver=letsencrypt"
-      - "traefik.http.services.bento-landing.loadbalancer.server.port=3000"
+      - "traefik.http.routers.bento-lp.rule=Host(`lp.bento212.com`)"
+      - "traefik.http.routers.bento-lp.entrypoints=websecure"
+      - "traefik.http.routers.bento-lp.tls=true"
+      - "traefik.http.routers.bento-lp.tls.certresolver=letsencrypt"
+      - "traefik.http.services.bento-lp.loadbalancer.server.port=3000"
+      - "traefik.docker.network=proxy"
 
 networks:
   proxy:
